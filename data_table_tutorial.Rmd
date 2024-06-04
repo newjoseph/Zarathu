@@ -136,7 +136,11 @@ colvars <- grep("Q_", names(dt), value=T)
 #cf with data.frame
 df[, colvars]
 
+###
 dt[, ..colvars] # confusing
+###
+
+#.SD : subset of data
 dt[, colvars, with=F]
 dt[, .SD, .SDcols = colvars]
 
@@ -176,8 +180,8 @@ dim(newdt)
 # newdt2 <- dt[HGHT >=175] %>% na.omit.data.table()
 # dim(newdt2)
 
-# this is wrong because output is null
-newdt1 <- dt[HGHT >=175, .N] %>% na.omit()
+# this is wrong because output is null. newdt1 is an int
+newdt1 <- dt[HGHT >=175, .N] %>% na.omit() 
 dim(newdt1)
 
 temp.dt <- dt[HGHT >=175] %>% na.omit() %>% 
@@ -193,6 +197,9 @@ dt[HGHT >=175] %>% na.omit() %>%
 # same
 dt[HGHT >=175] %>% na.omit() %>% 
   .[, .N, keyby=.(get("EXMD_BZ_YYYY") >= 2015, get("Q_SMK_YN") == 1)]
+### check above
+
+
 
 dt[HGHT >= 175, .N, keyby= .(Y2015 = ifelse(EXMD_BZ_YYYY >= 2015, ">=2015", "<2015"))]
 ```
@@ -203,7 +210,7 @@ get() : find string in the data.table. If it is not in the data.table, find the 
 ## new variables
 
 ```{r}
-
+# :=
 dt[, BMI2 := round(WGHT/(HGHT/100)^2, 1)]
 #same
 dt$BMI2 <- round(dt$WGHT/(dt$HGHT/100)^2, 1)
@@ -215,7 +222,7 @@ dt[, `:=`(BP_SYS140 = factor(as.integer(BP_SYS >= 140)), BMI25 = factor(as.integ
 # remove col
 dt[, BMI2 := NULL]
 
-# .SD : all cols
+# .SD : all cols (Subset of Data)
 
 # first medical record
 dt[order(EXMD_BZ_YYYY), .SD[1], keyby="RN_INDI"]
@@ -267,20 +274,18 @@ dt1[dt2, on = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM")]  # right join2
 dt1[!dt2, on = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM")] # left anti join
 dt2[!dt1, on = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM")] # right anti join
 
+### is there any good way to understand both inclusive and exclusive join at the same time?
 
 ```
 
 
 ## melt
 
-```{r}
-names(dt)
-```
+
 
 
 wide to long
 ```{r}
-
 # basic with warnings
 dt.long1 <- melt(dt, id.vars = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM"))
 
@@ -291,7 +296,17 @@ dt.long1 <- melt(dt,
                  )
 
 dt.long1
+```
 
+
+```{r}
+names(dt)
+names(dt.long1)
+```
+
+
+
+```{r}
 dt.long1 <- melt(dt, 
                  id.vars = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM"), # fixed
                  measure.vars = c("TOT_CHOL", "TG", "HDL", "LDL"), # vars to modify
@@ -302,6 +317,12 @@ dt.long1 <- melt(dt,
 dt.long1
 
 ```
+
+```{r}
+names(dt)
+names(dt.long1)
+```
+
 
 ## enhanced melt
 
@@ -314,6 +335,8 @@ dt.long2 <- melt(dt,
                  id.vars = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM"),
                  measure = list(col1, col2),
                  value.name = c("BP","VA"))
+
+### why if there are 3 categories, would it be the best example for this?
 
 dt.long2
 
@@ -329,7 +352,27 @@ dt.long2
 long to wide
 ```{r}
 
+names(dt.long1)
+head(dt.long1)
 
+## LHS: id.vars  i.e. fixed
+## RHS: things to make widen
+dt.wide1 <- dcast(dt.long1, EXMD_BZ_YYYY + RN_INDI + HME_YYYYMM ~ Lipid, value.var = "value")
+head(dt.wide1)
+```
+
+## aggregate
+
+There are many values under each RN_INDI, therefore, we need a function to combine all the values into one value
+```{r}
+dt.wide2 <- dcast(dt.long1, RN_INDI ~ Lipid, value.var = "value", fun.aggregate = mean, na.rm = T)
+```
+
+
+## enhanced dcast
+```{r}
+dt.wide3 <- dcast(dt.long2, ... ~ variable, value.var = c("BP", "VA"))
+dt.wide3
 ```
 
 
@@ -338,15 +381,23 @@ long to wide
 
 ```{r}
 library(haven);library(data.table);library(magrittr);library(fst)
+
+# check available cores
+parallel::detectCores()
+
 # Set core number when data.table
-setDTthreads(0)  ## 0: All
+setDTthreads(0)  ## 0: Use all core
+
+
 
 ## SAS to fst/csv
 for (v in c("bnc", "bnd", "m20", "m30", "m40", "m60", "inst", "g1e_0208", "g1e_0915")){
   read_sas(file.path("data", paste0("nsc2_", v, "_1000.sas7bdat"))) %>% 
-    #write_fst(file.path("data", paste0("nsc2_", v, "_1000.fst")))
-    fwrite(file.path("data", paste0("nsc2_", v, "_1000.csv")))
+    write_fst(file.path("data", paste0("nsc2_", v, "_1000.fst")))
+    #fwrite(file.path("data", paste0("nsc2_", v, "_1000.csv")))
 }
+
+
 
 
 ## fst
@@ -369,10 +420,79 @@ m30 <- fread("data/nsc2_m30_1000.csv")
 m40 <- fread("data/nsc2_m40_1000.csv") 
 m60 <- fread("data/nsc2_m60_1000.csv") 
 g1e_0915 <- fread("data/nsc2_g1e_0915_1000.csv") 
+
+# check the speed
+start.time <- Sys.time()
+inst <- read_fst("data/nsc2_inst_1000.fst", as.data.table = T)
+end.time <- Sys.time()
+time.taken_read <- end.time - start.time
+time.taken_read
+
+
+start.time <- Sys.time()
+inst <- fread("data/nsc2_inst_1000.csv")
+end.time <- Sys.time()
+time.taken_fread <- end.time - start.time
+time.taken_fread
+
+
+# fread is so much faster
+
 ```
 
 
-## 
+## data.table file
+
+
+```{r}
+#########################################################################################################################
+
+## find all the HTN diseases code
+code.HTN <- paste(paste0("I", 10:15), collapse = "|")
+code.HTN
+head(m20)
+
+## find the data with the HTN diseases after 2006/01/01
+data.start <- m20[ (SICK_SYM1 %like% code.HTN) & (MDCARE_STRT_DT >= 20060101), .(Indexdate = min(MDCARE_STRT_DT)), keyby = "RN_INDI"]
+data.start
+
+## find the data which happened previously
+names(m40)
+names(data.start)
+excl <- m40[(MCEX_SICK_SYM %like% code.HTN) & (MDCARE_STRT_DT < 20060101), .SD[1], .SDcols = c("MDCARE_STRT_DT"), keyby = "RN_INDI"]
+
+## merge two dataset with difference
+
+## only with after 2016
+data.incl <- data.start[!excl, on = "RN_INDI"] %>% # common variable is after 'on'
+  .[, Indexdate := as.Date(as.character(Indexdate), format = "%Y%m%d")] %>% 
+  .[]
+
+data.incl2 <- data.start[!excl, on = "RN_INDI"][, Indexdate := as.Date(as.character(Indexdate), format = "%Y%m%d")][]
+data.incl2
+all.equal(data.incl, data.incl2)
+
+
+## add age, sex, death
+names(bnd)
+names(bnc)
+names(data.incl)
+
+class(bnd$BTH_YYYY)
+
+data.asd <- merge(bnd, bnc[, .(SEX = SEX[1]), keyby = "RN_INDI"], by = "RN_INDI") %>% 
+  merge(data.incl, by="RN_INDI") %>% 
+  .[, `:=` (Age = year(Indexdate) - as.integer(substr(BTH_YYYY, 1,4 )),
+            Death = as.integer(!is.na(DTH_YYYYMM)),
+            Day_FU = as.integer(pmin(as.Date("2015-12-31"), Deathdate, na.rm = T ) - Indexdate))] %>%  # data is from 2006/01/01 to 2015/12/31
+  .[, -c("BTH_YYYY", "DTH_YYYYMM", "Deathdate")]
+            
+data.asd            
+#########################################################################################################################
+```
+
+
+## data.table inclusion
 
 ```{r}
 library(data.table);library(magrittr)
@@ -388,6 +508,9 @@ bnd <- fread("data/nsc2_bnd_1000.csv")[, Deathdate := (lubridate::ym(DTH_YYYYMM)
 m20 <- fread("data/nsc2_m20_1000.csv") 
 m30 <- fread("data/nsc2_m30_1000.csv") 
 m40 <- fread("data/nsc2_m40_1000.csv")[SICK_CLSF_TYPE %in% c(1, 2, NA)]            ## Exclude 3
+# if this is the case, it only chooses 1 and 2 and exclude NA as well
+# m40 <- fread("data/nsc2_m40_1000.csv")[!SICK_CLSF_TYPE == 3 ]   
+
 m60 <- fread("data/nsc2_m60_1000.csv") 
 g1e_0915 <- fread("data/nsc2_g1e_0915_1000.csv") 
 
@@ -395,6 +518,7 @@ g1e_0915 <- fread("data/nsc2_g1e_0915_1000.csv")
 
 ## after 2006, New I10-15 (Hypertensive disease) in Main Sick
 # new cases only
+names(m20)
 
 # | is or in 
 code.HTN <- paste(paste0("I", 10:15), collapse = "|")
@@ -406,7 +530,7 @@ excl <- m40[(MCEX_SICK_SYM %like% code.HTN) & (MDCARE_STRT_DT < 20060101), .SD[1
 ## Merge: left anti join
 data.incl <- data.start[!excl, on = "RN_INDI"][, Indexdate := as.Date(as.character(Indexdate), format = "%Y%m%d")][]
 #data.incl <- data.start[!(RN_INDI %in% excl$RN_INDI)]
-
+data.incl
 
 ## Add age, sex, death
 data.asd <- merge(bnd, bnc[, .(SEX = SEX[1]), keyby = "RN_INDI"], by = "RN_INDI") %>% 
@@ -414,11 +538,48 @@ data.asd <- merge(bnd, bnc[, .(SEX = SEX[1]), keyby = "RN_INDI"], by = "RN_INDI"
   .[, `:=`(Age = year(Indexdate) - as.integer(substr(BTH_YYYY, 1, 4)),
            Death = as.integer(!is.na(DTH_YYYYMM)),
            Day_FU = as.integer(pmin(as.Date("2015-12-31"), Deathdate, na.rm =T) - Indexdate))] %>% .[, -c("BTH_YYYY", "DTH_YYYYMM", "Deathdate")] 
+```
 
+## Do it yourself - inclusion
+```{r}
 
+## after 2006, New I10-15 (Hypertensive disease) in Main Sick
+# new cases only
+
+names(m20)
+names(m40)
+
+### 1. find the HTNcode
+code.HTN <- paste(paste0("I", 10:15), collapse="|")
+code.HTN
+### 2. find the data from 2016 and main sick is due to HTN which is the very first
+data.start <- m20[(SICK_SYM1 %like% code.HTN) & (MDCARE_STRT_DT >= 20060101), .(Indexdate = min(MDCARE_STRT_DT) ), keyby = "RN_INDI"]
+### 3. find the cases which are before 2016
+excl <- m40[(MDCARE_STRT_DT < 20060101) & (MCEX_SICK_SYM %like% code.HTN), .SD[1], .SDcols= c("MDCARE_STRT_DT"), keyby = "RN_INDI" ]
+### 4. merge data. Difference between all data and excl
+data.incl <- data.start[!excl, on="RN_INDI"] %>% 
+  .[, Indexdate:= as.Date(as.character(Indexdate), format = "%Y%m%d")] %>% 
+  .[]
+data.incl
+### 5. add age, sex, death
+names(bnd)
+names(bnc)
+names(data.incl)
+data.asd <- merge(bnd, bnc[,(SEX = SEX[1]), keyby = "RN_INDI"], by = "RN_INDI") %>% 
+  merge(data.incl, by="RN_INDI") %>% 
+  .[, `:=` (Age = year(Indexdate),
+            Death = as.integer(!is.na(DTH_YYYYMM)),
+            Day_FU = as.integer(pmin(as.Date("2015-12-31"), Deathdate, na.rm = T) - Indexdate))] %>% 
+  .[, -c("BTH_YYYY", "DTH_YYYYMM")]
 
 
 ```
 
 
+## data.table cci
+```{r}
 
+```
+
+
+## Do it yourself - inclusion
