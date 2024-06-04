@@ -1,0 +1,424 @@
+---
+title: "data_table_tutorial"
+output: html_document
+date: "2024-06-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# data.table
+
+## data.table intro
+
+
+dt[row,col,group]
+
+### import library
+```{r}
+library("data.table")
+library("magrittr")
+```
+
+### import data
+```{r}
+df <- read.csv("https://raw.githubusercontent.com/jinseob2kim/lecture-snuhlab/master/data/example_g1e.csv")
+
+# doesn't have to be a csv file
+dt <- fread("https://raw.githubusercontent.com/jinseob2kim/lecture-snuhlab/master/data/example_g1e.csv")
+
+class(df);class(dt)
+```
+
+
+import only necessary data due to memory and speed issues
+
+```{r}
+names(dt)
+
+
+#dt <- fread("https://raw.githubusercontent.com/jinseob2kim/lecture-snuhlab/master/data/example_g1e.csv", select=)
+
+dt1 <- fread("https://raw.githubusercontent.com/jinseob2kim/lecture-snuhlab/master/data/example_g1e.csv", select=c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM"))
+head(dt1)
+
+dt2 <- fread("https://raw.githubusercontent.com/jinseob2kim/lecture-snuhlab/master/data/example_g1e.csv", select = 1:5)
+head(dt2)
+
+dt3 <- fread("https://raw.githubusercontent.com/jinseob2kim/lecture-snuhlab/master/data/example_g1e.csv", drop=6:10)
+head(dt3)
+
+
+```
+
+### write data (save)
+
+```{r}
+
+write.csv(dt, "data.table.csv", row.names=F) 
+
+#recommended
+fwrite(dt, "datatable_fwrite.csv")
+```
+
+cf. fst is the fastest method
+
+### row operation
+```{r}
+dt[1:10] # dt[1:10,] is the same
+head(dt, 10)
+
+dt[(EXMD_BZ_YYYY %in% 2009:2012) & (BMI >=25)]
+
+#data.frame way
+df[(df$EXMD_BZ_YYYY %in% 2009:2012) & (df$BMI >=25),]
+subset(df, (EXMD_BZ_YYYY %in% 2009:2012) & (BMI>=25))
+with(df, df[(EXMD_BZ_YYYY %in% 2009:2012) & (BMI>=25),])
+# with is default in data.table
+
+
+dt[order(HME_YYYYMM)]
+
+dt[order(HME_YYYYMM,HGHT)]
+dt[order(HME_YYYYMM, -HGHT)]
+
+
+```
+
+once start with pipe, can't use [] again
+```{r}
+
+dt[(EXMD_BZ_YYYY %in% 2009:2012) & (BMI >= 25)][order(HGHT)][(order(GFR))]
+
+#same
+dt[(EXMD_BZ_YYYY %in% 2009:2012) & (BMI >= 25)] %>% 
+  .[order(HGHT)] %>% 
+  .[order(GFR)]
+
+temp.dt <- dt[(EXMD_BZ_YYYY %in% 2009:2012) & (BMI >= 25)][order(HGHT)][(order(GFR))]
+
+temp.dt1 <- dt[(EXMD_BZ_YYYY %in% 2009:2012) & (BMI >= 25)]
+temp.dt1
+
+temp.dt2 <- temp.dt1[order(HGHT)]
+temp.dt2
+
+temp.dt3 <- temp.dt2[order(GFR)]
+
+all.equal(temp.dt, temp.dt3)
+all.equal(temp.dt2, temp.dt3)
+
+
+```
+
+## column
+
+```{r}
+
+dt[, 1:10]
+dt[, c("HGHT","WGHT")]
+
+dt[, .(HGHT, WGHT)]
+# same
+dt[, list(HGHT, WGHT)] # .() == list()
+
+#same but rename col
+dt[, .(Height = HGHT, Weight=WGHT)]
+
+#return vector
+dt[, HGHT]
+
+
+colvars <- grep("Q_", names(dt), value=T)
+
+
+#cf with data.frame
+df[, colvars]
+
+dt[, ..colvars] # confusing
+dt[, colvars, with=F]
+dt[, .SD, .SDcols = colvars]
+
+dt[, .SD, .SDcols = -colvars]
+```
+ 
+## column summary
+
+```{r}
+dt[, .(mean(HGHT), mean(WGHT), mean(BMI))]
+dt[, .(HGHT = mean(HGHT), WGHT = mean(WGHT), BMI = mean(BMI))] # rename col
+
+dt[, lapply(.SD, mean), .SDcols = c("HGHT","WGHT","BMI")]
+
+dt[, lapply(.SD, mean)] # NA for missing data
+```
+
+
+```{r}
+dt[HGHT >= 175, .N, by=.(EXMD_BZ_YYYY, Q_SMK_YN)]
+dt[HGHT >= 175, .N, by =c("EXMD_BZ_YYYY","Q_SMK_YN")]
+
+dt[HGHT >= 175, .N, keyby= c("EXMD_BZ_YYYY", "Q_SMK_YN")] # keep the order
+dt[HGHT >= 175, .N, keyby= .(EXMD_BZ_YYYY, Q_SMK_YN)]
+
+```
+
+keyby includes NA values. Therefore, we need to remove the NAs in advance
+
+```{r}
+dt[HGHT >= 175]
+
+dim(dt[HGHT >= 175])
+
+newdt <- dt[HGHT >=175] %>% na.omit()
+dim(newdt)
+# newdt2 <- dt[HGHT >=175] %>% na.omit.data.table()
+# dim(newdt2)
+
+# this is wrong because output is null
+newdt1 <- dt[HGHT >=175, .N] %>% na.omit()
+dim(newdt1)
+
+temp.dt <- dt[HGHT >=175] %>% na.omit() %>% 
+  .[, .N, keyby=c("EXMD_BZ_YYYY", "Q_SMK_YN")]
+
+temp.dt
+dim(temp.dt)
+
+
+dt[HGHT >=175] %>% na.omit() %>% 
+  .[, .N, keyby= .(EXMD_BZ_YYYY >= 2015, Q_SMK_YN == 1)]
+
+# same
+dt[HGHT >=175] %>% na.omit() %>% 
+  .[, .N, keyby=.(get("EXMD_BZ_YYYY") >= 2015, get("Q_SMK_YN") == 1)]
+
+dt[HGHT >= 175, .N, keyby= .(Y2015 = ifelse(EXMD_BZ_YYYY >= 2015, ">=2015", "<2015"))]
+```
+
+get() : find string in the data.table. If it is not in the data.table, find the one as global variable
+
+
+## new variables
+
+```{r}
+
+dt[, BMI2 := round(WGHT/(HGHT/100)^2, 1)]
+#same
+dt$BMI2 <- round(dt$WGHT/(dt$HGHT/100)^2, 1)
+
+
+# multiple variables using `:=`
+dt[, `:=`(BP_SYS140 = factor(as.integer(BP_SYS >= 140)), BMI25 = factor(as.integer(BMI >= 25)))]
+
+# remove col
+dt[, BMI2 := NULL]
+
+# .SD : all cols
+
+# first medical record
+dt[order(EXMD_BZ_YYYY), .SD[1], keyby="RN_INDI"]
+# same
+dt[order(EXMD_BZ_YYYY), lapply(.SD, head,1), keyby="RN_INDI"]
+
+
+# last medical record
+dt[order(EXMD_BZ_YYYY), .SD[.N], keyby="RN_INDI"]
+
+
+
+# dt[order(EXMD_BZ_YYYY), .SD, keyby="RN_INDI"]
+# dim(dt[order(EXMD_BZ_YYYY), .SD, keyby="RN_INDI"])
+# dim(dt[order(EXMD_BZ_YYYY), .SD[1], keyby="RN_INDI"])
+```
+
+
+### specific symbol
+```{r}
+
+```
+
+
+
+### merge
+
+```{r}
+colvars
+
+dt1 <- dt[1:10, .SD, .SDcols = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM", colvars)] # only q
+dt2 <- dt[6:15, -..colvars] # everything but q
+
+# 6-10 are in both data.table
+
+
+merge(dt1, dt2, by = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM"), all = T)    # Full join (union)
+merge(dt1, dt2, by = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM"), all = F)    # Inner join (intersection)
+merge(dt1, dt2, by = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM"), all.x = T)  # left join
+merge(dt1, dt2, by = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM"), all.y = T)  # right join
+
+# difference (anti join)
+
+# dt[criteria, ]
+
+dt2[dt1, on = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM")]  # left join2
+dt1[dt2, on = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM")]  # right join2
+
+dt1[!dt2, on = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM")] # left anti join
+dt2[!dt1, on = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM")] # right anti join
+
+
+```
+
+
+## melt
+
+```{r}
+names(dt)
+```
+
+
+wide to long
+```{r}
+
+# basic with warnings
+dt.long1 <- melt(dt, id.vars = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM"))
+
+dt.long1 <- melt(dt, 
+                 id.vars = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM"), # fixed
+                 measure.vars = c("TOT_CHOL", "TG", "HDL", "LDL") # vars to modify
+                 
+                 )
+
+dt.long1
+
+dt.long1 <- melt(dt, 
+                 id.vars = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM"), # fixed
+                 measure.vars = c("TOT_CHOL", "TG", "HDL", "LDL"), # vars to modify
+                 variable.name= "Lipid", # new variable name
+                 value.name = "value" # name of the new value for each variable
+                 )
+
+dt.long1
+
+```
+
+## enhanced melt
+
+multiple groups
+```{r}
+col1 <- c("BP_SYS", "BP_DIA") # Systolic: 수축 Diastolic: 이완
+col2 <- c("VA_LT", "VA_RT") # left and right
+
+dt.long2 <- melt(dt,
+                 id.vars = c("EXMD_BZ_YYYY", "RN_INDI", "HME_YYYYMM"),
+                 measure = list(col1, col2),
+                 value.name = c("BP","VA"))
+
+dt.long2
+
+dt.long2[, variable := factor(variable, labels = c("SBP/VA_LT", "DBP/VA_RT"))] %>% select(variable="DBP/VA_RT")
+
+dt.long2
+
+```
+
+
+
+## decast
+long to wide
+```{r}
+
+
+```
+
+
+## data.table file
+
+
+```{r}
+library(haven);library(data.table);library(magrittr);library(fst)
+# Set core number when data.table
+setDTthreads(0)  ## 0: All
+
+## SAS to fst/csv
+for (v in c("bnc", "bnd", "m20", "m30", "m40", "m60", "inst", "g1e_0208", "g1e_0915")){
+  read_sas(file.path("data", paste0("nsc2_", v, "_1000.sas7bdat"))) %>% 
+    #write_fst(file.path("data", paste0("nsc2_", v, "_1000.fst")))
+    fwrite(file.path("data", paste0("nsc2_", v, "_1000.csv")))
+}
+
+
+## fst
+inst <- read_fst("data/nsc2_inst_1000.fst", as.data.table = T)
+bnc <- read_fst("data/nsc2_bnc_1000.fst", as.data.table = T) 
+bnd <- read_fst("data/nsc2_bnd_1000.fst", as.data.table = T) 
+m20 <- read_fst("data/nsc2_m20_1000.fst", as.data.table = T) 
+m30 <- read_fst("data/nsc2_m30_1000.fst", as.data.table = T) 
+m40 <- read_fst("data/nsc2_m40_1000.fst", as.data.table = T) 
+m60 <- read_fst("data/nsc2_m60_1000.fst", as.data.table = T) 
+g1e_0915 <- read_fst("data/nsc2_g1e_0915_1000.fst", as.data.table = T) 
+
+
+## csv
+inst <- fread("data/nsc2_inst_1000.csv")
+bnc <- fread("data/nsc2_bnc_1000.csv") 
+bnd <- fread("data/nsc2_bnd_1000.csv") 
+m20 <- fread("data/nsc2_m20_1000.csv") 
+m30 <- fread("data/nsc2_m30_1000.csv") 
+m40 <- fread("data/nsc2_m40_1000.csv") 
+m60 <- fread("data/nsc2_m60_1000.csv") 
+g1e_0915 <- fread("data/nsc2_g1e_0915_1000.csv") 
+```
+
+
+## 
+
+```{r}
+library(data.table);library(magrittr)
+# Set core number when data.table
+setDTthreads(0)  ## 0: All
+
+## csv
+inst <- fread("data/nsc2_inst_1000.csv")
+bnc <- fread("data/nsc2_bnc_1000.csv") 
+
+## Death date: last day in month
+bnd <- fread("data/nsc2_bnd_1000.csv")[, Deathdate := (lubridate::ym(DTH_YYYYMM) %>% lubridate::ceiling_date(unit = "month") - 1)][]
+m20 <- fread("data/nsc2_m20_1000.csv") 
+m30 <- fread("data/nsc2_m30_1000.csv") 
+m40 <- fread("data/nsc2_m40_1000.csv")[SICK_CLSF_TYPE %in% c(1, 2, NA)]            ## Exclude 3
+m60 <- fread("data/nsc2_m60_1000.csv") 
+g1e_0915 <- fread("data/nsc2_g1e_0915_1000.csv") 
+
+
+
+## after 2006, New I10-15 (Hypertensive disease) in Main Sick
+# new cases only
+
+# | is or in 
+code.HTN <- paste(paste0("I", 10:15), collapse = "|")
+data.start <- m20[like(SICK_SYM1, code.HTN) & (MDCARE_STRT_DT >= 20060101), .(Indexdate = min(MDCARE_STRT_DT)), keyby = "RN_INDI"]
+
+## Previous disease: Among all sick code
+excl <- m40[(MCEX_SICK_SYM %like% code.HTN) & (MDCARE_STRT_DT < 20060101), .SD[1], .SDcols = c("MDCARE_STRT_DT"), keyby = "RN_INDI"]
+
+## Merge: left anti join
+data.incl <- data.start[!excl, on = "RN_INDI"][, Indexdate := as.Date(as.character(Indexdate), format = "%Y%m%d")][]
+#data.incl <- data.start[!(RN_INDI %in% excl$RN_INDI)]
+
+
+## Add age, sex, death
+data.asd <- merge(bnd, bnc[, .(SEX = SEX[1]), keyby = "RN_INDI"], by = "RN_INDI") %>% 
+  merge(data.incl, by = "RN_INDI") %>% 
+  .[, `:=`(Age = year(Indexdate) - as.integer(substr(BTH_YYYY, 1, 4)),
+           Death = as.integer(!is.na(DTH_YYYYMM)),
+           Day_FU = as.integer(pmin(as.Date("2015-12-31"), Deathdate, na.rm =T) - Indexdate))] %>% .[, -c("BTH_YYYY", "DTH_YYYYMM", "Deathdate")] 
+
+
+
+
+```
+
+
+
