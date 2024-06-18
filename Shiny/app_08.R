@@ -8,6 +8,7 @@ players <- read.csv("data/nba2018.csv")
 ui <- fluidPage(
   titlePanel("NBA 2018/19 Player Stats"),
   sidebarLayout(
+    
     sidebarPanel(
       "Exploring all player stats from the NBA 2018/19 season",
       h3("Filters"),
@@ -17,12 +18,17 @@ ui <- fluidPage(
         min = -3, max = 10,
         value = c(0, 10)
       ),
+      
+      h3("Plot options"),
       selectInput(
-        "Team", "Team",
-        unique(players$Team),
-        selected = "Golden State Warriors",
-        multiple = TRUE
-      )
+        "variable", "variable",
+        choices = c("VORP", "Salary", "Age", "Height", "Weight"),
+        selected = "Salary"
+      ),
+      radioButtons(inputId = "plot_type", 
+                   label = "plot type",
+                   choices = c("histogram", "density"),
+                   selected = "histogram")
     ),
     mainPanel(
       strong(
@@ -60,10 +66,21 @@ server <- function(input, output, session) {
   })
 
   output$nba_plot <- renderPlot({
-    ggplot(filtered_data(), aes(Salary)) +
-      geom_histogram() +
+    
+    ggplot(filtered_data(), aes_string(input$variable)) +
       theme_classic() +
-      scale_x_log10(labels = scales::comma)
+      scale_x_log10(labels = scales::comma) +
+    
+    if(input$plot_type == "histogram"){
+      geom_histogram()
+    } else {
+      geom_density()
+    }
+    
+    # ggplot(filtered_data(), aes_string(input$variable)) +
+    #   geom_histogram() +
+    #   theme_classic() +
+    #   scale_x_log10(labels = scales::comma)
   })
 
 }

@@ -15,12 +15,13 @@ ui <- fluidPage(
         inputId = "VORP",
         label = "Player VORP rating at least",
         min = -3, max = 10,
-        value = 0
+        value = c(2,5)
       ),
       selectInput(
         "Team", "Team",
         unique(players$Team),
-        selected = "Golden State Warriors"
+        selected = "Golden State Warriors",
+        multiple = TRUE
       )
     ),
     mainPanel(
@@ -39,7 +40,8 @@ server <- function(input, output, session) {
 
   filtered_data <- reactive({
     players %>%
-      filter(VORP >= input$VORP,
+      filter(VORP >= input$VORP[1],
+             VORP <= input$VORP[2],
              Team %in% input$Team)
   })
 

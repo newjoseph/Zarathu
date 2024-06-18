@@ -36,32 +36,43 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
-
-  output$players_data <- renderDT({
-    data <- players %>%
+  
+  filtered_data <- reactive({
+    players %>%
       filter(VORP >= input$VORP,
              Team %in% input$Team)
-
-    data
   })
 
-  output$num_players <- renderText({
-    data <- players %>%
-      filter(VORP >= input$VORP,
-             Team %in% input$Team)
+  output$players_data <- renderDT({
+    filtered_data()
+    
+  })
+  
 
-    nrow(data)
+  output$num_players <- renderText({
+    # data <- players %>%
+    #   filter(VORP >= input$VORP,
+    #          Team %in% input$Team)
+    # 
+    # nrow(data)
+    
+    nrow(filtered_data())
   })
 
   output$nba_plot <- renderPlot({
-    data <- players %>%
-      filter(VORP >= input$VORP,
-             Team %in% input$Team)
-
-    ggplot(data, aes(Salary)) +
-      geom_histogram()
+    # data <- players %>%
+    #   filter(VORP >= input$VORP,
+    #          Team %in% input$Team)
+    # 
+    # ggplot(data, aes(Salary)) +
+    #   geom_histogram()
+    
+    ggplot(filtered_data(), aes(Salary)) +
+        geom_histogram() +
+        theme_classic() +
+        scale_x_log10(labels = scales::comma)
   })
-
+  
 }
 
 shinyApp(ui, server)

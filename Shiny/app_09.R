@@ -28,8 +28,21 @@ ui <- fluidPage(
       selectInput("variable", "Variable",
                   c("VORP", "Salary", "Age", "Height", "Weight"),
                   "Salary"),
-      radioButtons("plot_type", "Plot type", c("histogram", "density"))
-    ),
+      radioButtons("plot_type", "Plot type", c("histogram", "density")),
+      checkboxInput(inputId = "log", 
+                    label = "log scale",
+                    value = TRUE),
+      
+      
+      numericInput(inputId = "size",
+                   label = "font size",
+                   min = 1, max = 50, value = 14),
+      colourInput(inputId = "col",
+                  label = "color",
+                  value = "blue"
+                  )
+    
+      ),
     mainPanel(
       strong(
         "There are",
@@ -67,13 +80,18 @@ server <- function(input, output, session) {
 
   output$nba_plot <- renderPlot({
     p <- ggplot(filtered_data(), aes_string(input$variable)) +
-      theme_classic() +
-      scale_x_log10(labels = scales::comma)
+      theme_classic(input$size) +
+      if(input$log == TRUE){
+        scale_x_log10(labels = scales::comma)
+      } else {
+        scale_x_continuous(labels = scales::comma)
+      }
+      
 
     if (input$plot_type == "histogram") {
-      p <- p + geom_histogram()
+      p <- p + geom_histogram(fill = input$col)
     } else if (input$plot_type == "density") {
-      p <- p + geom_density()
+      p <- p + geom_density(fill = input$col)
     }
     p
   })

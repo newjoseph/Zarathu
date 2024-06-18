@@ -19,13 +19,18 @@ ui <- fluidPage(
         unique(players$Team),
         selected = "Golden State Warriors"
       )
+      
     ),
     mainPanel(
       strong(
         "There are",
         nrow(players),
         "players in the dataset"
-      )
+      ),
+      
+      plotOutput(outputId = "nba_plot"),
+      
+      tableOutput(outputId = "players_data")
     )
   )
 )

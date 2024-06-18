@@ -30,26 +30,50 @@ ui <- fluidPage(
         "players in the dataset"
       ),
       plotOutput("nba_plot"),
-      tableOutput("players_data")
+     # tableOutput("players_data")
+      DTOutput("players_data")
     )
   )
 )
 
 server <- function(input, output, session) {
 
-  output$players_data <- renderTable({
+  # output$players_data <- renderTable({
+  #   data <- players %>%
+  #     filter(VORP >= input$VORP,
+  #            Team %in% input$Team)
+  # 
+  #   data
+  # })
+  
+  output$players_data <- renderDT({ # as same as renderDataTable
+    
     data <- players %>%
-      filter(VORP >= input$VORP,
-             Team %in% input$Team)
-
-    data
+          filter(VORP >= input$VORP,
+                 Team %in% input$Team)
+    
   })
 
   output$num_players <- renderText({
+    
+    data <- players %>%
+      filter(VORP >= input$VORP,
+             Team %in% input$Team) %>% 
+      nrow()
 
   })
 
   # Build the plot output here
+  
+  output$nba_plot <- renderPlot({
+    
+    data <- players %>%
+      filter(VORP >= input$VORP,
+             Team %in% input$Team)
+      
+    ggplot(data, aes(Salary)) + geom_histogram()
+      
+  })
 
 }
 
